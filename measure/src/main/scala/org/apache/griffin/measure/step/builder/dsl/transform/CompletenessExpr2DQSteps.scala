@@ -18,7 +18,9 @@ under the License.
 */
 package org.apache.griffin.measure.step.builder.dsl.transform
 
-import org.apache.griffin.measure.configuration.dqdefinition.RuleParam
+import org.apache.commons.lang.StringUtils
+
+import org.apache.griffin.measure.configuration.dqdefinition.{RuleErrorConfParam, RuleParam}
 import org.apache.griffin.measure.configuration.enums._
 import org.apache.griffin.measure.context.DQContext
 import org.apache.griffin.measure.step.DQStep
@@ -85,8 +87,16 @@ case class CompletenessExpr2DQSteps(context: DQContext,
 
       // 2. incomplete record
       val incompleteRecordsTableName = "__incompleteRecords"
-      val completeWhereClause = aliases.map(a => s"`${a}` IS NOT NULL").mkString(" AND ")
-      val incompleteWhereClause = s"NOT (${completeWhereClause})"
+      val errorConfs: Seq[RuleErrorConfParam] = ruleParam.getErrorConfs
+      var incompleteWhereClause: String = ""
+      if (errorConfs.size == 0) {
+        // without errorConfs
+        val completeWhereClause = aliases.map(a => s"`${a}` IS NOT NULL").mkString(" AND ")
+        incompleteWhereClause = s"NOT (${completeWhereClause})"
+      } else {
+        // with errorConfs
+        incompleteWhereClause = this.getErrorConfCompleteWhereClause(errorConfs)
+      }
 
       val incompleteRecordsSql =
         s"SELECT * FROM `${sourceAliasTableName}` WHERE ${incompleteWhereClause}"
@@ -167,4 +177,56 @@ case class CompletenessExpr2DQSteps(context: DQContext,
     }
   }
 
+  /**
+    * get 'error' where clause
+    * @param errorConfs error configuraion list
+    * @return 'error' where clause
+    */
+  def getErrorConfCompleteWhereClause(errorConfs: Seq[RuleErrorConfParam]): String = {
+    errorConfs.map(errorConf => this.getEachErrorWhereClause(errorConf)).mkString(" OR ")
+  }
+
+  /**
+    * get error sql for each column
+    * @param errorConf  error configuration
+    * @return 'error' sql for each column
+    */
+  def getEachErrorWhereClause(errorConf: RuleErrorConfParam): String = {
+    val errorType: Option[String] = errorConf.getErrorType
+    val columnName: String = errorConf.getColumnName.get
+    if ("regex".equalsIgnoreCase(errorType.get)) {
+      // only have one regular expression
+      val regexValue: String = errorConf.getValues.apply(0)
+      val afterReplace: String = regexValue.replaceAll("""\\""", """\\\\""")
+      val result: String = s"`${columnName}` REGEXP '${afterReplace}'"
+      return result
+    } else if ("enumeration".equalsIgnoreCase(errorType.get)) {
+      val values: Seq[String] = errorConf.getValues
+      var inResult = ""
+      var nullResult = ""
+      if (values.contains("hive_none")) {
+        // hive_none means NULL
+        nullResult = s"(`${columnName}` IS NULL)"
+      }
+
+      val valueWithQuote: String = values.filter(value => !"hive_none".equals(value))
+        .map(value => s"'${value}'").mkString(", ")
+
+      if (!StringUtils.isEmpty(valueWithQuote)) {
+        inResult = s"(`${columnName}` IN (${valueWithQuote}))"
+      }
+
+      var result = ""
+      if (!StringUtils.isEmpty(inResult) && !StringUtils.isEmpty(nullResult)) {
+        result = s"(${inResult} OR ${nullResult})"
+      } else if (!StringUtils.isEmpty(inResult)) {
+        result = inResult
+      } else {
+        result = nullResult
+      }
+
+      return result
+    }
+    throw new IllegalArgumentException("type in error.confs only supports regex and enumeration way")
+  }
 }
