@@ -1,21 +1,20 @@
 /*
-Licensed to the Apache Software Foundation (ASF) under one
-or more contributor license agreements.  See the NOTICE file
-distributed with this work for additional information
-regarding copyright ownership.  The ASF licenses this file
-to you under the Apache License, Version 2.0 (the
-"License"); you may not use this file except in compliance
-with the License.  You may obtain a copy of the License at
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements.  See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License.  You may obtain a copy of the License at
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 
-  http://www.apache.org/licenses/LICENSE-2.0
-
-Unless required by applicable law or agreed to in writing,
-software distributed under the License is distributed on an
-"AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-KIND, either express or implied.  See the License for the
-specific language governing permissions and limitations
-under the License.
-*/
 package org.apache.griffin.measure.sink
 
 import scala.concurrent.Future
@@ -28,23 +27,23 @@ import org.mongodb.scala.result.UpdateResult
 import org.apache.griffin.measure.utils.ParamUtil._
 import org.apache.griffin.measure.utils.TimeUtil
 
-
 /**
-  * sink metric and record to mongo
-  */
+ * sink metric and record to mongo
+ */
 case class MongoSink(
-                      config: Map[String, Any],
-                      metricName: String,
-                      timeStamp: Long,
-                      block: Boolean) extends Sink {
+    config: Map[String, Any],
+    metricName: String,
+    timeStamp: Long,
+    block: Boolean)
+    extends Sink {
 
   MongoConnection.init(config)
 
   val OverTime = "over.time"
   val Retry = "retry"
 
-  val overTime = TimeUtil.milliseconds(config.getString(OverTime, "")).getOrElse(-1L)
-  val retry = config.getInt(Retry, 10)
+  val overTime: Long = TimeUtil.milliseconds(config.getString(OverTime, "")).getOrElse(-1L)
+  val retry: Int = config.getInt(Retry, 10)
 
   val _MetricName = "metricName"
   val _Timestamp = "timestamp"
@@ -64,17 +63,18 @@ case class MongoSink(
     mongoInsert(metrics)
   }
 
-  private val filter = Filters.and(
-    Filters.eq(_MetricName, metricName),
-    Filters.eq(_Timestamp, timeStamp)
-  )
+  private val filter =
+    Filters.and(Filters.eq(_MetricName, metricName), Filters.eq(_Timestamp, timeStamp))
 
   private def mongoInsert(dataMap: Map[String, Any]): Unit = {
     try {
       val update = Updates.set(_Value, dataMap)
       def func(): (Long, Future[UpdateResult]) = {
-        (timeStamp, MongoConnection.getDataCollection.updateOne(
-          filter, update, UpdateOptions().upsert(true)).toFuture)
+        (
+          timeStamp,
+          MongoConnection.getDataCollection
+            .updateOne(filter, update, UpdateOptions().upsert(true))
+            .toFuture)
       }
       if (block) SinkTaskRunner.addBlockTask(func _, retry, overTime)
       else SinkTaskRunner.addNonBlockTask(func _, retry)
@@ -102,7 +102,7 @@ object MongoConnection {
   var dataConf: MongoConf = _
   private var dataCollection: MongoCollection[Document] = _
 
-  def getDataCollection : MongoCollection[Document] = dataCollection
+  def getDataCollection: MongoCollection[Document] = dataCollection
 
   def init(config: Map[String, Any]): Unit = {
     if (!initialed) {
@@ -114,14 +114,12 @@ object MongoConnection {
 
   private def mongoConf(cfg: Map[String, Any]): MongoConf = {
     val url = cfg.getString(Url, "").trim
-    val mongoUrl = if (url.startsWith(_MongoHead)) url else {
-      _MongoHead + url
-    }
-    MongoConf(
-      mongoUrl,
-      cfg.getString(Database, ""),
-      cfg.getString(Collection, "")
-    )
+    val mongoUrl =
+      if (url.startsWith(_MongoHead)) url
+      else {
+        _MongoHead + url
+      }
+    MongoConf(mongoUrl, cfg.getString(Database, ""), cfg.getString(Collection, ""))
   }
   private def mongoCollection(mongoConf: MongoConf): MongoCollection[Document] = {
     val mongoClient: MongoClient = MongoClient(mongoConf.url)
