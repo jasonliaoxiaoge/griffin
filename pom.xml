@@ -30,7 +30,7 @@ under the License.
 
     <groupId>org.apache.griffin</groupId>
     <artifactId>griffin</artifactId>
-    <version>0.6.0-SNAPSHOT</version>
+    <version>0.7.0-SNAPSHOT</version>
     <packaging>pom</packaging>
     <name>Apache Griffin ${project.version}</name>
     <url>http://griffin.apache.org</url>
@@ -196,6 +196,7 @@ under the License.
                             <exclude>**/src/main/resources/public/**</exclude>
                             <exclude>**/pom.xml.releaseBackup</exclude>
                             <exclude>**/pom.xml.tag</exclude>
+                            <exclude>**/_SUCCESS</exclude>
                         </excludes>
                     </configuration>
                     <executions>
